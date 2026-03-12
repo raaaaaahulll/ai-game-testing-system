@@ -1,0 +1,70 @@
+/** @type {import('tailwindcss').Config} */
+export default {
+  content: [
+    "./index.html",
+    "./src/**/*.{js,ts,jsx,tsx}",
+  ],
+  darkMode: 'class',   // toggled by adding/removing 'dark' class on <html>
+  theme: {
+    extend: {
+      fontFamily: {
+        display: ['Orbitron', 'sans-serif'],
+        mono: ['JetBrains Mono', 'monospace'],
+      },
+      colors: {
+        accent: '#3B82F6',
+        accentHover: '#2563EB',
+        sidebar: '#1E293B',
+        sidebarHover: '#334155',
+        navActiveBg: '#E0F2FE',
+        navActiveText: '#0369A1',
+        navActiveBgDark: '#1D4ED8',
+        navActiveTextDark: '#BFDBFE',
+        surface: '#FFFFFF',
+        surfaceMuted: '#F8F8F8',
+        darkSurface: '#111827',
+        darkCard: '#1F2937',
+        darkBorder: '#374151',
+        textPrimary: '#333333',
+        textMuted: '#666666',
+        textLight: '#999999',
+        danger: '#DC3545',
+        dangerHover: '#c82333',
+        success: '#218838',
+        successBg: '#D4EDDA',
+        severityCriticalBg: '#FEE8E8',
+        severityCriticalText: '#EF4444',
+        severityHighBg: '#FFF7ED',
+        severityHighText: '#F97316',
+        severityMediumBg: '#FFFBEB',
+        severityMediumText: '#F59E0B',
+        severityLowBg: '#EFF6FF',
+        severityLowText: '#3B82F6',
+        kpi: {
+          blue: '#E0F7FA',
+          teal: '#E0F2F7',
+          lilac: '#F3E5F5',
+          pink: '#F8E0F7',
+          green: '#E8F5E9',
+          peach: '#FFF3E0',
+          orange: '#FFF4E6',
+          purple: '#F3E8FF',
+        },
+        rival: {
+          red: '#DC3545',
+          dark: '#2E303F',
+          panel: '#FFFFFF',
+          border: '#E5E7EB',
+        },
+      },
+      borderRadius: {
+        card: '0.75rem',
+      },
+      boxShadow: {
+        card: '0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.06)',
+        'card-dark': '0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3)',
+      },
+    },
+  },
+  plugins: [],
+}

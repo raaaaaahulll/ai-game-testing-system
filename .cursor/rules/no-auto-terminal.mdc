@@ -1,0 +1,18 @@
+---
+description: Do not run terminal commands for testing or verification after making fixes.
+alwaysApply: true
+---
+
+# Restriction on Terminal Execution
+
+The user has explicitly requested that I **do not** run terminal commands (such as starting the game, training scripts, or servers) after implementing a fix.
+
+## Reason
+Running the terminal automatically can cause inputs to reach the wrong windows or disrupt the user's environment.
+
+## Guidelines
+- **Implement the Fix**: Focus on code changes, file modifications, or configuration updates.
+- **Do Not Test/Verify in Terminal**: Even if a verification step is normally required, do not run the associated terminal commands.
+- **Instructional Output**: After the fix is complete, provide the user with the exact command they should run manually to verify the fix.
+- **Ask Before Running**: If you believe running a command is absolutely necessary and safe, ask for explicit permission first.
+- **Exception**: Safe "read-only" commands like `ls`, `grep`, or `cat` (for file inspection) are still permitted unless they interfere with active processes.
