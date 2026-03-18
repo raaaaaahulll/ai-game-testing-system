@@ -7,6 +7,7 @@ If backend is down and game_key is nfs_rivals, uses config.py defaults.
 import argparse
 import os
 import sys
+import time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -152,8 +153,8 @@ class TrainingProgressCallback(BaseCallback):
         self._last_report_steps = 0
         self._episode_count = 0
         self._best_reward = None
-        # Aim for ~50 updates over the full run; fall back to a sane default
-        self._report_every = max(1, (self.target_timesteps // 50) if self.target_timesteps else 10_000)
+        # Report often so the dashboard feels live (~every 500 steps, ~2–5 s depending on env)
+        self._report_every = max(500, min(5000, (self.target_timesteps // 1000) if self.target_timesteps else 2000))
 
     def _on_step(self) -> bool:
         # Count completed episodes from dones
@@ -217,7 +218,7 @@ class TrainingProgressCallback(BaseCallback):
 class StopRequestCallback(BaseCallback):
     """Check for stop_requested.txt; when present, raise KeyboardInterrupt so finally block runs and model is saved."""
 
-    def __init__(self, game_key: str, check_every: int = 500, verbose: int = 0):
+    def __init__(self, game_key: str, check_every: int = 100, verbose: int = 0):
         super().__init__(verbose)
         self.game_key = game_key
         self._check_every = check_every
@@ -265,7 +266,19 @@ def main():
 
     cfg = fetch_game_config(game_key)
     genre = cfg.get("genre", "racing")
-    
+
+    # Focus game window immediately so it comes to foreground when user clicks Start training
+    try:
+        from core.controller import focus_game_window
+        window_title = (cfg.get("window_title") or "").strip()
+        if window_title:
+            if focus_game_window(window_title):
+                print(f"Focused game window: {window_title!r}")
+            else:
+                print(f"Could not focus window {window_title!r} (game may not be open or title may not match).")
+    except Exception as e:
+        print(f"Focus game window skipped: {e}")
+
     if algo == "auto":
         if genre == "racing":
             algo = "dqn"

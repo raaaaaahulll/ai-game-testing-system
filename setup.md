@@ -146,6 +146,11 @@ Models are stored per game under `agents\models\<game_key>\`.
 - **Python or npm not found**  
   Install Python and Node.js and add them to your system PATH during installation.
 
+- **Packages "already satisfied" in a different path (e.g. c:\\python314\\...)**  
+  The backend and training use the project’s **.venv**. If `python -m pip install <package>` still reports the global path, install using the venv’s Python explicitly:  
+  **`.venv\Scripts\python.exe -m pip install <package>`**  
+  (e.g. `.venv\Scripts\python.exe -m pip install tensorboard`). No need to activate first.
+
 ---
 
 See **DEMONSTRATE.md** for the demo guide, **docs/UNIVERSAL_GAME_TESTER.md** for multiple games, and **docs/PROFESSIONAL_AI_TESTING.md** for architecture detail.

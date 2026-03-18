@@ -245,6 +245,7 @@ _agent_lock = threading.Lock()
 
 # --- Training process (Phase 4: start training from dashboard) ---
 _training_process: Optional[subprocess.Popen] = None
+_training_log_path: Optional[str] = None  # log file path for current run (to read on crash)
 _training_lock = threading.Lock()
 _training_progress: Dict[str, Dict] = {}  # latest snapshot per game_key
 _training_history: Dict[str, List[Dict]] = {}  # list of past runs per game_key
@@ -926,12 +927,38 @@ async def training_status(
 
     History is persisted across backend restarts so users can see "so far"
     training progress even after downtime. Only the last ~10 runs per game are kept."""
-    global _training_process, _training_game_key
+    global _training_process, _training_game_key, _training_run_id, _training_log_path
+    startup_error = None
+    log_path_for_response = None
     with _training_lock:
         if _training_process is not None and _training_process.poll() is not None:
-            # Process exited (crash or finish); clear so dashboard and Start training work
+            # Process exited (crash, finish, or graceful stop); read log tail so dashboard can show why
+            if _training_log_path and Path(_training_log_path).exists():
+                log_path_for_response = _training_log_path
+                try:
+                    with open(_training_log_path, "r", encoding="utf-8", errors="replace") as f:
+                        lines = f.readlines()
+                    startup_error = "".join(lines[-40:]).strip() or None
+                except Exception:
+                    startup_error = "(Could not read log file)"
+            # Mark progress and history as done so dashboard shows completion (e.g. after Stop)
+            game_key_ended = _training_game_key
+            run_id_ended = _training_run_id
+            if game_key_ended and game_key_ended in _training_progress:
+                snap = _training_progress[game_key_ended]
+                snap["done"] = True
+                snap["updated_at"] = time.time()
+                if run_id_ended:
+                    runs = _training_history.get(game_key_ended) or []
+                    for r in reversed(runs):
+                        if r.get("run_id") == run_id_ended:
+                            r["done"] = True
+                            r.setdefault("finished_at", snap["updated_at"])
+                            break
             _training_process = None
             _training_game_key = None
+            _training_run_id = None
+            _training_log_path = None
         running = _training_process is not None and _training_process.poll() is None
         pid = _training_process.pid if _training_process and running else None
         running_game = _training_game_key if running else None
@@ -942,27 +969,29 @@ async def training_status(
             progress = list(_training_progress.values())[-1] if _training_progress else None
             # When no game is specified, history is not particularly meaningful; return empty list.
             history = []
-    return {
+    out = {
         "running": running,
         "pid": pid,
         "progress": progress,
         "running_game_key": running_game,
         "history": history,
     }
+    if startup_error:
+        out["startup_error"] = startup_error
+        out["log_path"] = log_path_for_response
+    return out
 
 
 @app.post("/agent/train/stop")
 async def agent_train_stop():
-    """Stop the training process. Writes a stop-request file so the process can save the model before exiting."""
-    global _training_process, _training_game_key, _training_run_id
+    """Stop the training process. Writes a stop-request file so the process can save the model before exiting.
+    Returns immediately; the training script checks the file every ~100 steps and exits gracefully.
+    Status endpoint clears the process when it detects exit."""
+    global _training_process, _training_game_key
     with _training_lock:
         if _training_process is None:
             return {"status": "stopped", "message": "Training was not running"}
         game_key = _training_game_key or ""
-        proc = _training_process
-        running = proc.poll() is None
-    if running:
-        # Ask training script to stop gracefully so it saves the model (finally block runs)
         stop_dir = PROJECT_ROOT / "logs" / "training"
         stop_file = stop_dir / "stop_requested.txt"
         try:
@@ -970,35 +999,6 @@ async def agent_train_stop():
             stop_file.write_text(game_key or "", encoding="utf-8")
         except Exception:
             pass
-        # Wait up to 30 seconds for process to exit
-        for _ in range(30):
-            if proc.poll() is not None:
-                break
-            time.sleep(1)
-        # If still running, terminate (model may not be saved)
-        if proc.poll() is None:
-            proc.terminate()
-            try:
-                proc.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-    with _training_lock:
-        _training_process = None
-        if game_key and game_key in _training_progress:
-            snap = _training_progress[game_key]
-            snap["done"] = True
-            snap["updated_at"] = time.time()
-            # Also mark finished_at on the corresponding history entry
-            runs = _training_history.get(game_key) or []
-            run_id = snap.get("run_id") or _training_run_id
-            if run_id:
-                for r in reversed(runs):
-                    if r.get("run_id") == run_id:
-                        r["done"] = True
-                        r.setdefault("finished_at", snap["updated_at"])
-                        break
-        _training_game_key = None
-        _training_run_id = None
     return {"status": "stopped", "game_key": game_key}
 
 
@@ -1049,7 +1049,7 @@ async def agent_train_progress(payload: TrainingProgressPayload):
 @app.post("/agent/train")
 async def agent_train_start(payload: AgentTrainPayload = Body(...)):
     """Start training for a game in a subprocess (agents/train.py --game_key ...). Phase 4."""
-    global _training_process, _training_game_key, _training_run_id
+    global _training_process, _training_game_key, _training_run_id, _training_log_path
     game_key = (payload.game_key or "").strip() or "nfs_rivals"
     algo = (payload.algo or "ppo").strip().lower()
     if algo not in ("ppo", "dqn"):
@@ -1090,8 +1090,15 @@ async def agent_train_start(payload: AgentTrainPayload = Body(...)):
             "TRAIN_RUN_ID": run_id,
             "TRAIN_SOURCE": "dashboard",
         }
+        train_script = PROJECT_ROOT / "agents" / "train.py"
+        if not train_script.exists():
+            log_file.close()
+            raise HTTPException(
+                500,
+                f"Training script not found: {train_script}. Run the backend from the project root (same folder that contains 'agents' and 'backend').",
+            )
         _training_process = subprocess.Popen(
-            [sys.executable, "agents/train.py", "--game_key", game_key, "--algo", algo],
+            [sys.executable, str(train_script), "--game_key", game_key, "--algo", algo],
             cwd=str(PROJECT_ROOT),
             stdout=log_file,
             stderr=subprocess.STDOUT,
@@ -1100,6 +1107,7 @@ async def agent_train_start(payload: AgentTrainPayload = Body(...)):
         _training_progress.pop(game_key, None)
         _training_game_key = game_key
         _training_run_id = run_id
+        _training_log_path = str(log_file_path)
     return {
         "status": "started",
         "pid": _training_process.pid,

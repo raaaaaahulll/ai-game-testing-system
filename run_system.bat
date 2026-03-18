@@ -68,12 +68,12 @@ echo.
 echo  Sidebar: Dashboard ^| Session ^& Analytics ^| Previous Sessions ^| Game Configs ^| Training ^| Play vs AI.
 echo  Active game: On Session ^& Analytics use the "Active game" dropdown to choose which game the agent should control.
 echo  Game configs: Add/edit games; set key bindings (arrows or WASD) and Mouse mode (None / Menus only / Gameplay); configure how each game is controlled.
-echo  Training: Pick a configured game, click "Start training", and watch training progress (steps and basic reward) update live.
+echo  Training: Pick a game, click "Start training". Progress bar, "Last updated Xs ago", and stat cards update live; success/completion messages show inline. History table shows status icons and hover.
 echo  Previous Sessions: Filter by game; summary (total sessions, total bugs, bugs this week); duration and severity per session.
 echo  Play vs AI: Board games hub (Chess, Checkers, Othello, Connect Four, Tic-Tac-Toe). Chess uses Stockfish; others use in-browser AI. URL: /play (or /play?game=chess).
 echo.
 echo  Agent (recommended): In the dashboard go to Session ^& Analytics, pick the Active game, then click "Start agent" to begin testing. Click "Stop agent" to end the run.
-echo  Training (recommended): In Training, select the game and click "Start training" for that game. Training progress appears on the Training page (steps) and in the backend console (detailed logs).
+echo  Training (recommended): In Training, select the game and click "Start training". Live progress, "Last updated Xs ago", and stat highlights appear. "Stop training" responds immediately; the run stops in the background and the model is saved.
 echo  Agent details: The agent fetches per-game config from the backend and loads a model from agents\models\<game_key>\model_ppo.zip (or model_dqn.zip).
 echo  Advanced CLI (optional): python agents\train.py --game_key ^<key^> [--algo ppo^|dqn] [--timesteps 500000]
 echo  Legacy: agents\model_ppo.zip still used for nfs_rivals if agents\models\nfs_rivals\ missing.

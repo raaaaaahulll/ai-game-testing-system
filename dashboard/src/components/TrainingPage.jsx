@@ -11,6 +11,7 @@ export default function TrainingPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [starting, setStarting] = useState(false)
+  const [banner, setBanner] = useState(null)
 
   const selectedGame = game || (games[0] ?? '')
 
@@ -38,10 +39,27 @@ export default function TrainingPage() {
     fetchStatus(selectedGame)
     const interval = setInterval(() => {
       fetchStatus(selectedGame)
-    }, 4000)
+    }, 2000)
     return () => clearInterval(interval)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedGame])
+
+  useEffect(() => {
+    if (!banner) return
+    const t = setTimeout(() => setBanner(null), 8000)
+    return () => clearTimeout(t)
+  }, [banner])
+
+  useEffect(() => {
+    const err = status?.startup_error
+    if (!err || status?.running) return
+    const short = err.length > 600 ? `${err.slice(-600)}\n...(see full log)` : err
+    const logPath = status?.log_path ? `\nLog file: ${status.log_path}` : ''
+    setBanner({
+      type: 'error',
+      message: `Training stopped unexpectedly.${logPath}\n\n${short}`,
+    })
+  }, [status?.startup_error, status?.running, status?.log_path])
 
   const startTraining = async () => {
     if (!selectedGame) return
@@ -54,20 +72,30 @@ export default function TrainingPage() {
       })
       if (!r.ok) {
         const d = await r.json().catch(() => ({}))
-        throw new Error(d.detail || r.statusText || 'Failed to start training')
+        const msg = typeof d.detail === 'string' ? d.detail : Array.isArray(d.detail) ? (d.detail[0]?.msg || d.detail[0]?.loc?.join(' ') || JSON.stringify(d.detail)) : d.detail?.detail || r.statusText || 'Failed to start training'
+        throw new Error(msg)
       }
-      await r.json().catch(() => ({}))
+      const data = await r.json().catch(() => ({}))
+      // Refetch immediately so UI shows "Running" and cleared progress
       await fetchStatus(selectedGame)
-      alert(`Training started for ${gameDisplayNames?.[selectedGame] || selectedGame}.`)
+      setBanner({
+        type: 'success',
+        message: `Training started for ${gameDisplayNames?.[selectedGame] || selectedGame}. Backend: ${API_BASE}`,
+      })
+      // Refetch again after a short delay so we catch the running state even if the first poll was slow
+      setTimeout(() => fetchStatus(selectedGame), 800)
+      setTimeout(() => fetchStatus(selectedGame), 2000)
     } catch (e) {
-      alert(e.message || 'Failed to start training')
+      setBanner({
+        type: 'error',
+        message: `${e.message || 'Failed to start training'} (Backend: ${API_BASE}). Is the backend running on port 8000?`,
+      })
     } finally {
       setStarting(false)
     }
   }
 
   const stopTraining = async () => {
-    if (!window.confirm('Stop the current training run?')) return
     setStarting(true)
     try {
       const r = await fetch(`${API_BASE}/agent/train/stop`, { method: 'POST' })
@@ -77,7 +105,10 @@ export default function TrainingPage() {
       }
       await fetchStatus(selectedGame)
     } catch (e) {
-      alert(e.message || 'Failed to stop training')
+      setBanner({
+        type: 'error',
+        message: e.message || 'Failed to stop training',
+      })
     } finally {
       setStarting(false)
     }
@@ -105,6 +136,17 @@ export default function TrainingPage() {
         description="Monitor and manage per-game training runs for your agents."
       />
       <div className="max-w-7xl mx-auto px-6 pb-8 space-y-6">
+        {banner && (
+          <div
+            className={
+              banner.type === 'success'
+                ? 'rounded-lg px-4 py-3 text-sm border border-emerald-300 bg-emerald-50 text-emerald-900 dark:border-emerald-900/60 dark:bg-emerald-900/20 dark:text-emerald-100'
+                : 'rounded-lg px-4 py-3 text-sm border border-red-300 bg-red-50 text-red-900 dark:border-red-900/60 dark:bg-red-900/20 dark:text-red-100'
+            }
+          >
+            <pre className="whitespace-pre-wrap font-sans text-xs max-h-40 overflow-y-auto">{banner.message}</pre>
+          </div>
+        )}
         {/* Game Selector Row */}
         <div className="flex flex-wrap items-center gap-3 bg-white dark:bg-darkCard p-4 rounded-card border border-gray-200 dark:border-darkBorder shadow-sm">
           <label htmlFor="training-game-selector" className="form-label text-textMuted dark:text-gray-400 whitespace-nowrap mb-0">
@@ -186,6 +228,7 @@ export default function TrainingPage() {
                   {!runningForThisGame && !anyRunning && (
                     <p className="text-xs text-textMuted dark:text-gray-500 mt-1">
                       Showing the last known training snapshot for this game. New runs started from the dashboard or command line will continue from the saved model.
+                      <span className="block mt-1 text-[0.7rem] opacity-90">Backend: <code className="bg-black/10 dark:bg-white/10 px-1 rounded">{API_BASE}</code> — ensure the backend is running (e.g. <code className="bg-black/10 dark:bg-white/10 px-1 rounded">uvicorn backend.main:app --port 8000</code>) so Start training works.</span>
                     </p>
                   )}
                 </div>
